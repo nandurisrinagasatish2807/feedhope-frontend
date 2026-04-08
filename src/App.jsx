@@ -1,8 +1,11 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import axios from 'axios'
 import './index.css'
 
 function App() {
+  const [campaigns, setCampaigns] = useState([]);
+  const [donorProfile, setDonorProfile] = useState(null);
+  const [user, setUser] = useState(null);
   const [view, setView] = useState('selection');
   const [role, setRole] = useState('');
   
@@ -12,6 +15,40 @@ function App() {
     email: '',
     password: ''
   });
+
+  useEffect(() => {
+    if (view === 'dashboard') {
+      const fetchCampaigns = async () => {
+        try {
+          const response = await axios.get('http://localhost:8080/api/v1/campaigns');
+          setCampaigns(response.data.data.content);
+        } catch (error) {
+          console.error("Failed to fetch campaigns:", error);
+        }
+      };
+      const fetchProfile = async () => {
+        const token = localStorage.getItem('token');
+        if (!token || token === 'undefined' || token === 'null' || !user || !user.id) {
+          console.warn("No token or user found, skipping fetchProfile");
+          return;
+        }
+
+        try {
+          const response = await axios.get(`http://localhost:8080/api/v1/donors/profile/${user.id}`, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
+          setDonorProfile(response.data);
+        } catch (error) {
+          console.error("Failed to fetch profile:", error);
+        }
+      };
+      
+      fetchCampaigns();
+      fetchProfile();
+    }
+  }, [view, user]);
 
   const handleRegisterClick = (selectedRole) => {
     setRole(selectedRole);
@@ -52,7 +89,8 @@ function App() {
       });
       
       // Save the JWT token
-      localStorage.setItem('token', response.data.token);
+      localStorage.setItem('token', response.data.data.accessToken);
+      setUser(response.data.data.user);
       alert('Login Successful!');
       setView('dashboard'); // Placeholder for your dashboard
     } catch (error) {
@@ -74,12 +112,12 @@ function App() {
           <div className="grid md:grid-cols-3 gap-6 mb-12">
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-blue-50">
               <p className="text-slate-500 font-bold mb-2 uppercase text-xs tracking-widest">Total Impact</p>
-              <h3 className="text-5xl font-black text-blue-600">12</h3>
+              <h3 className="text-5xl font-black text-blue-600">{donorProfile ? donorProfile.totalMealsFunded : '12'}</h3>
               <p className="text-slate-400 mt-2 font-medium">Meals Provided</p>
             </div>
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-green-50">
               <p className="text-slate-500 font-bold mb-2 uppercase text-xs tracking-widest">Hope Points</p>
-              <h3 className="text-5xl font-black text-green-600">450</h3>
+              <h3 className="text-5xl font-black text-green-600">{donorProfile ? donorProfile.totalMealsFunded * 10 : 450}</h3>
               <p className="text-slate-400 mt-2 font-medium">Earned this month</p>
             </div>
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-orange-50">
@@ -90,15 +128,24 @@ function App() {
           </div>
 
           <div className="bg-white p-10 rounded-[3rem] shadow-2xl border border-slate-100">
-            <h4 className="text-2xl font-bold mb-6">Active Campaigns near UTD</h4>
+            <h4 className="text-2xl font-bold mb-6">Active Campaigns</h4>
             <div className="space-y-4">
-              <div className="flex justify-between items-center p-6 bg-slate-50 rounded-2xl">
-                <div>
-                  <h5 className="font-bold text-lg text-slate-800">UTD Food Pantry Drive</h5>
-                  <p className="text-slate-500">Needs canned goods and dry pasta</p>
-                </div>
-                <button className="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-blue-100">Donate Now</button>
-              </div>
+              {campaigns && campaigns.length > 0 ? (
+                campaigns.map((campaign, index) => (
+                  <div key={index} className="flex justify-between items-center p-6 bg-slate-50 rounded-2xl">
+                    <div>
+                      <h5 className="font-bold text-lg text-slate-800">{campaign.title}</h5>
+                      <p className="text-slate-500">{campaign.description}</p>
+                      <p className="text-sm font-medium text-slate-600 mt-2">
+                        Raised: ${campaign.raisedAmount || 0} / Goal: ${campaign.goalAmount}
+                      </p>
+                    </div>
+                    <button className="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-blue-100">Donate Now</button>
+                  </div>
+                ))
+              ) : (
+                <p className="text-slate-500">No active campaigns available.</p>
+              )}
             </div>
           </div>
         </div>
