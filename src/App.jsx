@@ -52,31 +52,47 @@ function App() {
 
   const handleRegisterClick = (selectedRole) => {
     setRole(selectedRole);
+    setFormData({ name: '', email: '', password: '' }); // Clear state fields
     setView('register');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (formData.password.length < 8) {
+      alert('Password validation error: Must be at least 8 characters long.');
+      return;
+    }
     
-    // Split name for registration
-    const [firstName, ...lastNameParts] = formData.name.trim().split(" ");
-    const lastName = lastNameParts.join(" ") || "User";
+    // Parse first name and last name securely
+    const cleanName = formData.name.trim();
+    const spaceIndex = cleanName.indexOf(' ');
+    
+    let firstName = cleanName;
+    let lastName = 'User'; // Default fallback value for backend database persistence
+
+    if (spaceIndex !== -1) {
+      firstName = cleanName.substring(0, spaceIndex);
+      lastName = cleanName.substring(spaceIndex + 1).trim() || 'User';
+    }
 
     const payload = {
       firstName: firstName,
       lastName: lastName,
-      email: formData.email,
+      email: formData.email.trim(),
       password: formData.password,
-      role: role || "DONOR"
+      phone: "" // Required matching parameter string placeholder for RegisterRequest DTO
     };
 
     try {
       await axios.post('http://localhost:8080/api/v1/auth/register', payload);
       alert('Registration Successful! Please log in.');
-      setView('login'); // Take them to login after success
+      setFormData({ name: '', email: '', password: '' }); // Reset fields
+      setView('login'); 
     } catch (error) {
       console.log("Backend Error Details:", error.response?.data);
-      alert('Registration failed. Check console.');
+      const serverMessage = error.response?.data?.message || 'Check console logs for details.';
+      alert(`Registration failed: ${serverMessage}`);
     }
   };
 
@@ -84,40 +100,41 @@ function App() {
     e.preventDefault();
     try {
       const response = await axios.post('http://localhost:8080/api/v1/auth/login', {
-        email: formData.email,
+        email: formData.email.trim(),
         password: formData.password
       });
       
-      // Save the JWT token
+      // Save the JWT token safely
       localStorage.setItem('token', response.data.data.accessToken);
       setUser(response.data.data.user);
       alert('Login Successful!');
-      setView('dashboard'); // Placeholder for your dashboard
+      setView('dashboard'); 
     } catch (error) {
       alert('Login failed: Invalid credentials.');
     }
   };
-// --- DASHBOARD VIEW ---
+
+  // --- DASHBOARD VIEW ---
   if (view === 'dashboard') {
     return (
       <div className="min-h-screen bg-slate-50 p-8">
         <nav className="flex justify-between items-center mb-12">
           <h1 className="text-3xl font-black tracking-tight">Feed<span className="text-blue-600">Hope</span></h1>
-          <button onClick={() => setView('selection')} className="bg-slate-200 px-6 py-2 rounded-xl font-bold hover:bg-slate-300">Log Out</button>
+          <button onClick={() => { setView('selection'); setUser(null); localStorage.removeItem('token'); }} className="bg-slate-200 px-6 py-2 rounded-xl font-bold hover:bg-slate-300">Log Out</button>
         </nav>
         
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-4xl font-black mb-8 text-slate-900">Welcome back, Satish!</h2>
+          <h2 className="text-4xl font-black mb-8 text-slate-900">Welcome back, {user?.firstName || 'User'}!</h2>
           
           <div className="grid md:grid-cols-3 gap-6 mb-12">
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-blue-50">
               <p className="text-slate-500 font-bold mb-2 uppercase text-xs tracking-widest">Total Impact</p>
-              <h3 className="text-5xl font-black text-blue-600">{donorProfile ? donorProfile.totalMealsFunded : '12'}</h3>
+              <h3 className="text-5xl font-black text-blue-600">{donorProfile ? donorProfile.totalMealsFunded : '0'}</h3>
               <p className="text-slate-400 mt-2 font-medium">Meals Provided</p>
             </div>
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-green-50">
               <p className="text-slate-500 font-bold mb-2 uppercase text-xs tracking-widest">Hope Points</p>
-              <h3 className="text-5xl font-black text-green-600">{donorProfile ? donorProfile.totalMealsFunded * 10 : 450}</h3>
+              <h3 className="text-5xl font-black text-green-600">{donorProfile ? donorProfile.totalMealsFunded * 10 : 0}</h3>
               <p className="text-slate-400 mt-2 font-medium">Earned this month</p>
             </div>
             <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-orange-50">
@@ -152,6 +169,7 @@ function App() {
       </div>
     );
   }
+
   // --- LOGIN VIEW ---
   if (view === 'login') {
     return (
@@ -169,6 +187,7 @@ function App() {
               <input 
                 type="email" 
                 required
+                value={formData.email}
                 className="w-full p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500 outline-none" 
                 placeholder="name@email.com"
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
@@ -179,6 +198,7 @@ function App() {
               <input 
                 type="password" 
                 required
+                value={formData.password}
                 className="w-full p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500 outline-none" 
                 placeholder="••••••••"
                 onChange={(e) => setFormData({...formData, password: e.target.value})}
@@ -213,6 +233,7 @@ function App() {
               <input 
                 type="text" 
                 required
+                value={formData.name}
                 className="w-full p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500 outline-none" 
                 placeholder="Enter your name"
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
@@ -223,16 +244,18 @@ function App() {
               <input 
                 type="email" 
                 required
+                value={formData.email}
                 className="w-full p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500 outline-none" 
                 placeholder="name@email.com"
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
               />
             </div>
             <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1">Password</label>
+              <label className="block text-sm font-bold text-slate-700 mb-1">Password (Min 8 Characters)</label>
               <input 
                 type="password" 
                 required
+                value={formData.password}
                 className="w-full p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500 outline-none" 
                 placeholder="••••••••"
                 onChange={(e) => setFormData({...formData, password: e.target.value})}
@@ -255,7 +278,7 @@ function App() {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-slate-900">
       <div className="text-center mb-10">
         <h1 className="text-6xl font-black mb-2 tracking-tight">
-          Feed<span className="text-red-600">TEST</span>
+          Feed<span className="text-blue-600">Hope</span>
         </h1>
         <p className="text-slate-500 text-lg font-medium">Choose your account type to get started</p>
       </div>
@@ -284,7 +307,6 @@ function App() {
         </div>
       </div>
 
-      {/* NEW LOGIN LINK ON MAIN SCREEN */}
       <p className="mt-10 text-slate-500 font-medium">
         Returning user? <button onClick={() => setView('login')} className="text-blue-600 font-bold hover:underline">Sign in to your account</button>
       </p>
