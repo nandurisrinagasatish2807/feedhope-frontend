@@ -50,9 +50,57 @@ function App() {
     }
   }, [view, user]);
 
+  // 💳 New Stripe Payment Intent Handler
+  const handleDonate = async (campaignId) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert("Session expired. Please log in again.");
+      setView('login');
+      return;
+    }
+
+    const inputAmount = prompt("Enter your donation amount ($):", "25");
+    if (!inputAmount || isNaN(inputAmount) || parseFloat(inputAmount) <= 0) {
+      alert("Please enter a valid donation amount.");
+      return;
+    }
+
+    try {
+      // Points exactly to your native backend DonationController.java endpoint matching CreateDonationRequest parameters
+      const response = await axios.post('http://localhost:8080/api/v1/donations/create-intent', {
+        campaignId: campaignId,
+        amount: parseFloat(inputAmount),
+        currency: "USD"
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      // Safely read the generated transaction details
+      const donationData = response.data.data;
+      
+      if (donationData && donationData.status === "PENDING") {
+        alert(`Payment Intent Staged Successfully!\nDonation ID: ${donationData.id}\nStatus: ${donationData.status}\n\nSimulating local card swipe clearance mechanism...`);
+        
+        // Simulating immediate payment completion on your screen
+        if (view === 'dashboard') {
+          setView('selection');
+          setTimeout(() => setView('dashboard'), 100);
+        }
+      } else {
+        alert("Failed to initialize transaction pipeline securely.");
+      }
+
+    } catch (error) {
+      console.error("Donation initialization failed:", error);
+      alert("Payment processing failed: " + (error.response?.data?.message || error.message));
+    }
+  };
+
   const handleRegisterClick = (selectedRole) => {
     setRole(selectedRole);
-    setFormData({ name: '', email: '', password: '' }); // Clear state fields
+    setFormData({ name: '', email: '', password: '' }); 
     setView('register');
   };
 
@@ -64,12 +112,11 @@ function App() {
       return;
     }
     
-    // Parse first name and last name securely
     const cleanName = formData.name.trim();
     const spaceIndex = cleanName.indexOf(' ');
     
     let firstName = cleanName;
-    let lastName = 'User'; // Default fallback value for backend database persistence
+    let lastName = 'User'; 
 
     if (spaceIndex !== -1) {
       firstName = cleanName.substring(0, spaceIndex);
@@ -81,13 +128,13 @@ function App() {
       lastName: lastName,
       email: formData.email.trim(),
       password: formData.password,
-      phone: "" // Required matching parameter string placeholder for RegisterRequest DTO
+      phone: "" 
     };
 
     try {
       await axios.post('http://localhost:8080/api/v1/auth/register', payload);
       alert('Registration Successful! Please log in.');
-      setFormData({ name: '', email: '', password: '' }); // Reset fields
+      setFormData({ name: '', email: '', password: '' }); 
       setView('login'); 
     } catch (error) {
       console.log("Backend Error Details:", error.response?.data);
@@ -104,7 +151,6 @@ function App() {
         password: formData.password
       });
       
-      // Save the JWT token safely
       localStorage.setItem('token', response.data.data.accessToken);
       setUser(response.data.data.user);
       alert('Login Successful!');
@@ -157,7 +203,13 @@ function App() {
                         Raised: ${campaign.raisedAmount || 0} / Goal: ${campaign.goalAmount}
                       </p>
                     </div>
-                    <button className="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-blue-100">Donate Now</button>
+                    {/* ⚡ Wire up the functional click event listener handler */}
+                    <button 
+                      onClick={() => handleDonate(campaign.id)}
+                      className="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-blue-100 transition-transform active:scale-95 hover:bg-blue-700"
+                    >
+                      Donate Now
+                    </button>
                   </div>
                 ))
               ) : (
