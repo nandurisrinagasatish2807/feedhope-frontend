@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from 'react'
-import axios from 'axios'
-import './index.css'
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import './index.css';
 
 function App() {
   const [campaigns, setCampaigns] = useState([]);
@@ -9,7 +12,6 @@ function App() {
   const [view, setView] = useState('selection');
   const [role, setRole] = useState('');
   
-  // State for Form Data
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -26,18 +28,14 @@ function App() {
           console.error("Failed to fetch campaigns:", error);
         }
       };
+
       const fetchProfile = async () => {
         const token = localStorage.getItem('token');
-        if (!token || token === 'undefined' || token === 'null' || !user || !user.id) {
-          console.warn("No token or user found, skipping fetchProfile");
-          return;
-        }
+        if (!token || token === 'undefined' || token === 'null' || !user || !user.id) return;
 
         try {
           const response = await axios.get(`http://localhost:8080/api/v1/donors/profile/${user.id}`, {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
+            headers: { Authorization: `Bearer ${token}` }
           });
           setDonorProfile(response.data);
         } catch (error) {
@@ -50,7 +48,6 @@ function App() {
     }
   }, [view, user]);
 
-  // 💳 New Stripe Payment Intent Handler
   const handleDonate = async (campaignId) => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -66,24 +63,17 @@ function App() {
     }
 
     try {
-      // Points exactly to your native backend DonationController.java endpoint matching CreateDonationRequest parameters
       const response = await axios.post('http://localhost:8080/api/v1/donations/create-intent', {
         campaignId: campaignId,
         amount: parseFloat(inputAmount),
         currency: "USD"
       }, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
 
-      // Safely read the generated transaction details
       const donationData = response.data.data;
-      
       if (donationData && donationData.status === "PENDING") {
-        alert(`Payment Intent Staged Successfully!\nDonation ID: ${donationData.id}\nStatus: ${donationData.status}\n\nSimulating local card swipe clearance mechanism...`);
-        
-        // Simulating immediate payment completion on your screen
+        alert(`Payment Intent Staged Successfully!\nDonation ID: ${donationData.id}\n\nSimulating local card processing clearance...`);
         if (view === 'dashboard') {
           setView('selection');
           setTimeout(() => setView('dashboard'), 100);
@@ -91,7 +81,6 @@ function App() {
       } else {
         alert("Failed to initialize transaction pipeline securely.");
       }
-
     } catch (error) {
       console.error("Donation initialization failed:", error);
       alert("Payment processing failed: " + (error.response?.data?.message || error.message));
@@ -104,17 +93,15 @@ function App() {
     setView('register');
   };
 
-  const handleSubmit = async (e) => {
+  const handleRegisterSubmit = async (e) => {
     e.preventDefault();
-
     if (formData.password.length < 8) {
-      alert('Password validation error: Must be at least 8 characters long.');
+      alert('Password must be at least 8 characters long.');
       return;
     }
     
     const cleanName = formData.name.trim();
     const spaceIndex = cleanName.indexOf(' ');
-    
     let firstName = cleanName;
     let lastName = 'User'; 
 
@@ -123,23 +110,20 @@ function App() {
       lastName = cleanName.substring(spaceIndex + 1).trim() || 'User';
     }
 
-    const payload = {
-      firstName: firstName,
-      lastName: lastName,
-      email: formData.email.trim(),
-      password: formData.password,
-      phone: "" 
-    };
-
     try {
-      await axios.post('http://localhost:8080/api/v1/auth/register', payload);
+      await axios.post('http://localhost:8080/api/v1/auth/register', {
+        firstName,
+        lastName,
+        email: formData.email.trim(),
+        password: formData.password,
+        phone: "",
+        role: role 
+      });
       alert('Registration Successful! Please log in.');
       setFormData({ name: '', email: '', password: '' }); 
       setView('login'); 
     } catch (error) {
-      console.log("Backend Error Details:", error.response?.data);
-      const serverMessage = error.response?.data?.message || 'Check console logs for details.';
-      alert(`Registration failed: ${serverMessage}`);
+      alert(`Registration failed: ${error.response?.data?.message || 'Error occurred.'}`);
     }
   };
 
@@ -160,172 +144,44 @@ function App() {
     }
   };
 
-  // --- DASHBOARD VIEW ---
+  // Render isolated view components based on active screen states
   if (view === 'dashboard') {
     return (
-      <div className="min-h-screen bg-slate-50 p-8">
-        <nav className="flex justify-between items-center mb-12">
-          <h1 className="text-3xl font-black tracking-tight">Feed<span className="text-blue-600">Hope</span></h1>
-          <button onClick={() => { setView('selection'); setUser(null); localStorage.removeItem('token'); }} className="bg-slate-200 px-6 py-2 rounded-xl font-bold hover:bg-slate-300">Log Out</button>
-        </nav>
-        
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-4xl font-black mb-8 text-slate-900">Welcome back, {user?.firstName || 'User'}!</h2>
-          
-          <div className="grid md:grid-cols-3 gap-6 mb-12">
-            <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-blue-50">
-              <p className="text-slate-500 font-bold mb-2 uppercase text-xs tracking-widest">Total Impact</p>
-              <h3 className="text-5xl font-black text-blue-600">{donorProfile ? donorProfile.totalMealsFunded : '0'}</h3>
-              <p className="text-slate-400 mt-2 font-medium">Meals Provided</p>
-            </div>
-            <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-green-50">
-              <p className="text-slate-500 font-bold mb-2 uppercase text-xs tracking-widest">Hope Points</p>
-              <h3 className="text-5xl font-black text-green-600">{donorProfile ? donorProfile.totalMealsFunded * 10 : 0}</h3>
-              <p className="text-slate-400 mt-2 font-medium">Earned this month</p>
-            </div>
-            <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-orange-50">
-              <p className="text-slate-500 font-bold mb-2 uppercase text-xs tracking-widest">Rank</p>
-              <h3 className="text-5xl font-black text-orange-500">#4</h3>
-              <p className="text-slate-400 mt-2 font-medium">In Richardson area</p>
-            </div>
-          </div>
-
-          <div className="bg-white p-10 rounded-[3rem] shadow-2xl border border-slate-100">
-            <h4 className="text-2xl font-bold mb-6">Active Campaigns</h4>
-            <div className="space-y-4">
-              {campaigns && campaigns.length > 0 ? (
-                campaigns.map((campaign, index) => (
-                  <div key={index} className="flex justify-between items-center p-6 bg-slate-50 rounded-2xl">
-                    <div>
-                      <h5 className="font-bold text-lg text-slate-800">{campaign.title}</h5>
-                      <p className="text-slate-500">{campaign.description}</p>
-                      <p className="text-sm font-medium text-slate-600 mt-2">
-                        Raised: ${campaign.raisedAmount || 0} / Goal: ${campaign.goalAmount}
-                      </p>
-                    </div>
-                    {/* ⚡ Wire up the functional click event listener handler */}
-                    <button 
-                      onClick={() => handleDonate(campaign.id)}
-                      className="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold shadow-lg shadow-blue-100 transition-transform active:scale-95 hover:bg-blue-700"
-                    >
-                      Donate Now
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <p className="text-slate-500">No active campaigns available.</p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+      <Dashboard 
+        campaigns={campaigns} 
+        donorProfile={donorProfile} 
+        user={user} 
+        setView={setView} 
+        setUser={setUser} 
+        handleDonate={handleDonate}
+      />
     );
   }
 
-  // --- LOGIN VIEW ---
   if (view === 'login') {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 text-slate-900">
-        <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md border border-slate-100">
-          <button onClick={() => setView('selection')} className="text-blue-600 font-bold mb-6 hover:underline flex items-center gap-2">
-            ← Back
-          </button>
-          <h2 className="text-3xl font-black mb-2 text-blue-600">Login</h2>
-          <p className="text-slate-500 mb-8 font-medium">Welcome back to FeedHope</p>
-          
-          <form className="space-y-4" onSubmit={handleLoginSubmit}>
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
-              <input 
-                type="email" 
-                required
-                value={formData.email}
-                className="w-full p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="name@email.com"
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1">Password</label>
-              <input 
-                type="password" 
-                required
-                value={formData.password}
-                className="w-full p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="••••••••"
-                onChange={(e) => setFormData({...formData, password: e.target.value})}
-              />
-            </div>
-            <button type="submit" className="w-full py-4 rounded-2xl font-bold text-white text-lg mt-4 shadow-lg bg-blue-600 shadow-blue-100 transition-transform active:scale-95">
-              Sign In
-            </button>
-          </form>
-          <p className="mt-6 text-center text-slate-500 font-medium text-sm">
-            Don't have an account? <button onClick={() => setView('selection')} className="text-blue-600 font-bold hover:underline">Register</button>
-          </p>
-        </div>
-      </div>
+      <Login 
+        formData={formData} 
+        setFormData={setFormData} 
+        handleLoginSubmit={handleLoginSubmit} 
+        setView={setView}
+      />
     );
   }
 
-  // --- REGISTER VIEW ---
   if (view === 'register') {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 text-slate-900">
-        <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl w-full max-w-md border border-slate-100">
-          <button onClick={() => setView('selection')} className="text-blue-600 font-bold mb-6 hover:underline flex items-center gap-2">
-            ← Back
-          </button>
-          <h2 className="text-3xl font-black mb-2 text-slate-900">Create Account</h2>
-          <p className="text-slate-500 mb-8 font-medium">Register as a <span className={role === 'DONOR' ? 'text-blue-600' : 'text-green-600'}>{role}</span></p>
-          
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1">Full Name</label>
-              <input 
-                type="text" 
-                required
-                value={formData.name}
-                className="w-full p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="Enter your name"
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
-              <input 
-                type="email" 
-                required
-                value={formData.email}
-                className="w-full p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="name@email.com"
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1">Password (Min 8 Characters)</label>
-              <input 
-                type="password" 
-                required
-                value={formData.password}
-                className="w-full p-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-blue-500 outline-none" 
-                placeholder="••••••••"
-                onChange={(e) => setFormData({...formData, password: e.target.value})}
-              />
-            </div>
-            <button type="submit" className={`w-full py-4 rounded-2xl font-bold text-white text-lg mt-4 shadow-lg transition-transform active:scale-95 ${role === 'DONOR' ? 'bg-blue-600 shadow-blue-100' : 'bg-green-600 shadow-green-100'}`}>
-              Complete Registration
-            </button>
-          </form>
-          <p className="mt-6 text-center text-slate-500 font-medium text-sm">
-            Already have an account? <button onClick={() => setView('login')} className="text-blue-600 font-bold hover:underline">Log In</button>
-          </p>
-        </div>
-      </div>
+      <Register 
+        formData={formData} 
+        setFormData={setFormData} 
+        handleSubmit={handleRegisterSubmit} 
+        role={role} 
+        setView={setView}
+      />
     );
   }
 
-  // --- SELECTION VIEW ---
+  // Fallback: Default Account Selection View
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-slate-900">
       <div className="text-center mb-10">
