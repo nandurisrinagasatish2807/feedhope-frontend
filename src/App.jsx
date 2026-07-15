@@ -8,8 +8,18 @@ import './index.css';
 function App() {
   const [campaigns, setCampaigns] = useState([]);
   const [donorProfile, setDonorProfile] = useState(null);
-  const [user, setUser] = useState(null);
-  const [view, setView] = useState('selection');
+  
+  // 1. Persistent State Initialization: Read from localStorage on app boot
+  const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem('user');
+    return savedUser && savedUser !== 'undefined' ? JSON.parse(savedUser) : null;
+  });
+
+  const [view, setView] = useState(() => {
+    const token = localStorage.getItem('token');
+    return token ? 'dashboard' : 'selection';
+  });
+
   const [role, setRole] = useState('');
   
   const [formData, setFormData] = useState({
@@ -17,6 +27,26 @@ function App() {
     email: '',
     password: ''
   });
+
+  // 2. Stripe Redirect Handler: Catch URL query parameters from checkout redirect
+  useEffect(() => {
+    const queryParams = new URLSearchParams(window.location.search);
+    if (queryParams.get('payment') === 'success') {
+      alert('🏆 Thank you for your contribution! Your donation was processed successfully.');
+      // Clean up the URL string so the notification doesn't pop up again on manual refreshes
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (queryParams.get('payment') === 'cancel') {
+      alert('❌ Transaction canceled. Your payment method was not charged.');
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
+  // 3. Keep localStorage clean when user explicitly logs out
+  useEffect(() => {
+    if (!user) {
+      localStorage.removeItem('user');
+    }
+  }, [user]);
 
   useEffect(() => {
     if (view === 'dashboard') {
@@ -57,33 +87,34 @@ function App() {
     }
 
     const inputAmount = prompt("Enter your donation amount ($):", "25");
-    if (!inputAmount || isNaN(inputAmount) || parseFloat(inputAmount) <= 0) {
+    if (!inputAmount) return; 
+
+    const amountInCents = Math.round(parseFloat(inputAmount) * 100);
+    if (isNaN(amountInCents) || amountInCents <= 0) {
       alert("Please enter a valid donation amount.");
       return;
     }
 
+    const selectedCampaign = campaigns.find(c => c.id === campaignId);
+    const campaignTitle = selectedCampaign ? selectedCampaign.title : "Community Support Drive";
+
     try {
-      const response = await axios.post('http://localhost:8080/api/v1/donations/create-intent', {
+      const response = await axios.post('http://localhost:8080/api/v1/payments/create-checkout-session', {
         campaignId: campaignId,
-        amount: parseFloat(inputAmount),
-        currency: "USD"
+        amount: amountInCents,
+        campaignTitle: campaignTitle
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      const donationData = response.data.data;
-      if (donationData && donationData.status === "PENDING") {
-        alert(`Payment Intent Staged Successfully!\nDonation ID: ${donationData.id}\n\nSimulating local card processing clearance...`);
-        if (view === 'dashboard') {
-          setView('selection');
-          setTimeout(() => setView('dashboard'), 100);
-        }
+      if (response.data && response.data.sessionUrl) {
+        window.location.href = response.data.sessionUrl;
       } else {
-        alert("Failed to initialize transaction pipeline securely.");
+        alert("Failed to initialize secure transaction pipeline with payment handler.");
       }
     } catch (error) {
       console.error("Donation initialization failed:", error);
-      alert("Payment processing failed: " + (error.response?.data?.message || error.message));
+      alert("Payment processing failed: " + (error.response?.data?.error || error.message));
     }
   };
 
@@ -135,7 +166,10 @@ function App() {
         password: formData.password
       });
       
+      // Sync access payload token AND user details to survival context
       localStorage.setItem('token', response.data.data.accessToken);
+      localStorage.setItem('user', JSON.stringify(response.data.data.user));
+      
       setUser(response.data.data.user);
       alert('Login Successful!');
       setView('dashboard'); 
@@ -144,7 +178,6 @@ function App() {
     }
   };
 
-  // Render isolated view components based on active screen states
   if (view === 'dashboard') {
     return (
       <Dashboard 
@@ -181,7 +214,6 @@ function App() {
     );
   }
 
-  // Fallback: Default Account Selection View
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-slate-900">
       <div className="text-center mb-10">
