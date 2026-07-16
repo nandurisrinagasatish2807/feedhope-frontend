@@ -60,7 +60,7 @@ function AppContent() {
     const fetchProfile = async () => {
       if (!user.id) return;
       try {
-        const response = await axios.get(`http://localhost:8080/api/v1/donors/profile/${user.id}`, {
+        const response = await axios.get('http://localhost:8080/api/v1/donors/profile/me', {
           headers: { Authorization: `Bearer ${token}` }
         });
         setDonorProfile(response.data);
